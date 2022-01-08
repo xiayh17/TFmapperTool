@@ -23,12 +23,19 @@ query_anno <- function(tfmapperdb = tfmapperdb,
                        cell_line_key = cell_line_key,
                        cell_type_key = cell_type_key,
                        tissue_type_key = tissue_type_key) {
+
   tmp_keys <- paste0(unique(unlist(gene_data[,"DCid"])), collapse = ",")
 
+  cell_line_key <- sql_key(cell_line_key)
+  cell_type_key <- sql_key(cell_type_key)
+  tissue_type_key <- sql_key(tissue_type_key)
+
   anno_query <- glue("SELECT * FROM ann_info WHERE (DCid IN ({tmp_keys}))
-                  AND (`Cell_line` IN ('{cell_line_key}'))
-                  AND (`Cell_type` IN ('{cell_type_key}'))
-                  AND (`Tissue_type` IN ('{tissue_type_key}'))")
+                  AND (`Cell_line` IN ({cell_line_key}))
+                  AND (`Cell_type` IN ({cell_type_key}))
+                  AND (`Tissue_type` IN ({tissue_type_key}))")
+
+
 
   gene_anno <- tbl(tfmapperdb, sql(anno_query)) %>%
     collect()
@@ -62,11 +69,16 @@ query_gene <- function(tfmapperdb = tfmapperdb,
                        portion_key = portion_key,
                        gene_key = gene_key) {
 
+  species_key <- sql_key(species_key)
+  ip_key <- sql_key(ip_key)
+  portion_key <- sql_key(portion_key)
+  gene_key <- sql_key(gene_key)
+
   sub_query <- glue("SELECT *
                     FROM chr_table
-                    WHERE (`Species` IN ('{species_key}'))
-                    AND (`IP` IN ('{ip_key}'))
-                    AND (`Portion` IN ('{portion_key}'))")
+                    WHERE (`Species` IN ({species_key}))
+                    AND (`IP` IN ({ip_key}))
+                    AND (`Portion` IN ({portion_key}))")
 
   position_sub <- tbl(tfmapperdb, sql(sub_query)) %>%
     collect()
@@ -76,7 +88,7 @@ query_gene <- function(tfmapperdb = tfmapperdb,
   ### 对子表逐一查询
   gene_pos_l <- lapply(position_sub, function(x){
 
-    gene_query <- paste0("SELECT * FROM ",x, " WHERE (GeneSymbol"," IN ('",gene_key,"'))")
+    gene_query <- paste0("SELECT * FROM ",x, " WHERE (GeneSymbol"," IN (",gene_key,"))")
 
     tbl(tfmapperdb, sql(gene_query)) %>%
       collect()
@@ -88,7 +100,10 @@ query_gene <- function(tfmapperdb = tfmapperdb,
     infos <- names(gene_pos_l)
     ## 筛选并处理
     if(nrow(gene_pos_l[[x]]>0)){
+      gene_pos_l[[x]][,"Species"] <- str_split(infos[x],"_")[[1]][1]
+      gene_pos_l[[x]][,"IP"] <- str_split(infos[x],"_")[[1]][2]
       gene_pos_l[[x]][,"Chr"] <- str_split(infos[x],"_")[[1]][3]
+      gene_pos_l[[x]][,"Portion"] <- str_split(infos[x],"_")[[1]][4]
       return(gene_pos_l[[x]])
     }
 
@@ -128,11 +143,15 @@ query_coord <- function(tfmapperdb = tfmapperdb,
                         ip_key = ip_key,
                         start_key = start_key,
                         end_key = end_key) {
+
+  species_key <- sql_key(species_key)
+  ip_key <- sql_key(ip_key)
+
   chr_query <- glue("SELECT *
                     FROM chr_table
-                    WHERE (`Species` IN ('{species_key}'))
+                    WHERE (`Species` IN ({species_key}))
                     AND (`Chr` IN ('{chr_key}'))
-                    AND (`IP` IN ('{ip_key}'))")
+                    AND (`IP` IN ({ip_key}))")
 
   chr_sub <- tbl(tfmapperdb, sql(chr_query)) %>%
     collect()
@@ -150,7 +169,10 @@ query_coord <- function(tfmapperdb = tfmapperdb,
   coor_res_l2 <- lapply(seq_along(coor_res_l), function(x){
     infos <- names(coor_res_l)
     if(nrow(coor_res_l[[x]]>0)){
+      coor_res_l[[x]][,"Species"] <- str_split(infos[x],"_")[[1]][1]
+      coor_res_l[[x]][,"IP"] <- str_split(infos[x],"_")[[1]][2]
       coor_res_l[[x]][,"Chr"] <- str_split(infos[x],"_")[[1]][3]
+      coor_res_l[[x]][,"Portion"] <- str_split(infos[x],"_")[[1]][4]
       return(coor_res_l[[x]])
     }
   })
@@ -175,7 +197,12 @@ query_coord <- function(tfmapperdb = tfmapperdb,
 #' }
 merge_query <- function(gene_data,anno_info) {
   ## 合并位置和注释信息
-  res <- merge(gene_data,anno_info,by="DCid")
+  res <- merge(gene_data,anno_info,by="DCid",all = TRUE)
+  ## 规范Species信息
+  res[,"Species.x"][res[,"Species.x"] == "human"] = "Homo sapiens"
+  res[,"Species.x"][res[,"Species.x"] == "mouse"] = "Mus musculus"
+  res[,"Species"] = res[,"Species.x"]
+  res = res[,!(names(res) %in% c("Species.x","Species.y"))]
   return(res)
 }
 
@@ -203,11 +230,16 @@ gene_pull <- function(tfmapperdb = tfmapperdb,
                       species_key = species_key,
                       ip_key = ip_key,
                       portion_key = portion_key) {
+
+  species_key <- sql_key(species_key)
+  ip_key <- sql_key(ip_key)
+  portion_key <- sql_key(portion_key)
+
   pre_query <- glue("SELECT `GeneSymbol`
                     FROM gene_info
-                    WHERE (`Species` IN ('{species_key}'))
-                    AND (`IP` IN ('{ip_key}'))
-                    AND (`Portion` IN ('{portion_key}'))")
+                    WHERE (`Species` IN ({species_key}))
+                    AND (`IP` IN ({ip_key}))
+                    AND (`Portion` IN ({portion_key}))")
 
   Gene_pull <- tbl(tfmapperdb, sql(pre_query)) %>%
     collect()
@@ -238,11 +270,14 @@ coor_pull <- function(tfmapperdb = tfmapperdb,
                       ip_key = ip_key,
                       chr_key = chr_key) {
 
+  species_key <- sql_key(species_key)
+  ip_key <- sql_key(ip_key)
+
   chr_query <- glue("SELECT *
                     FROM chr_table
-                    WHERE (`Species` IN ('{species_key}'))
-                    AND (`Chr` IN ('{chr_key}'))
-                    AND (`IP` IN ('{ip_key}'))")
+                    WHERE (`Species` IN ({species_key}))
+                    AND (`Chr` IN ({chr_key}))
+                    AND (`IP` IN ({ip_key}))")
 
   chr_sub <- tbl(tfmapperdb, sql(chr_query)) %>%
     collect()
@@ -262,4 +297,34 @@ coor_pull <- function(tfmapperdb = tfmapperdb,
     max()
 
   return(c(start_min,end_max))
+}
+
+## 查询已知基因结果下可选细胞类型
+query_bio <- function(tfmapperdb = tfmapperdb,
+                       gene_data) {
+  tmp_keys <- paste0(unique(unlist(gene_data[,"DCid"])), collapse = ",")
+
+  anno_query <- glue("SELECT * FROM ann_info WHERE (DCid IN ({tmp_keys}))")
+
+  gene_anno <- tbl(tfmapperdb, sql(anno_query)) %>%
+    collect()
+  return(gene_anno)
+}
+
+## 标准化用于查询的key
+sql_key <- function(key) {
+  if (length(key)==1 & key == "ALL") {
+
+    key_name <- deparse(substitute(key))
+    pull_name <-  gsub("key","pull",key_name)
+    ke_sql <- paste0('"',get(pull_name),'"',collapse =  ',')
+
+  } else {
+
+    ke_sql <- paste0('"',key,'"',collapse =  ',')
+
+  }
+
+  return(ke_sql)
+
 }
