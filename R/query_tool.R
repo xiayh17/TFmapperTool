@@ -314,17 +314,28 @@ query_bio <- function(tfmapperdb = tfmapperdb,
 
 ## 标准化用于查询的key
 sql_key <- function(key) {
-  if (length(key)==1 & key == "ALL") {
 
-    key_name <- deparse(substitute(key))
-    pull_name <-  gsub("key","pull",key_name)
-    ke_sql <- paste0('"',get(pull_name),'"',collapse =  ',')
+  if (length(key)==1) {
+
+    if (key == "ALL") {
+
+      key_name <- deparse(substitute(key))
+      pull_name <-  gsub("key","pull",key_name)
+      ke_sql <- paste0('"',get(pull_name),'"',collapse =  ',')
+
+    } else {
+
+      ke_sql <- paste0('"',key,'"',collapse =  ',')
+
+    }
 
   } else {
 
     ke_sql <- paste0('"',key,'"',collapse =  ',')
 
   }
+
+
 
   return(ke_sql)
 
