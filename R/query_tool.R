@@ -272,6 +272,7 @@ coor_pull <- function(tfmapperdb = tfmapperdb,
 
   species_key <- sql_key(species_key)
   ip_key <- sql_key(ip_key)
+  chr_key <- sql_key(chr_key)
 
   chr_query <- glue("SELECT *
                     FROM chr_table
